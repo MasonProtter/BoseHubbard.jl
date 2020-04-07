@@ -1,0 +1,14 @@
+name = "BoseHubbard"
+uuid = "b546bd83-60c3-4ef0-8515-d0eab677fa1c"
+authors = ["MasonProtter <mason.protter@icloud.com>"]
+version = "0.1.0"
+
+[deps]
+Arpack = "7d9fca2a-8960-54d3-9f78-7d1dccf2cb97"
+BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
+Conjugates = "cd731e1f-768d-4c10-b144-5251ec0945a2"
+LazyBandedMatrices = "d7e5e226-e90b-4449-9968-0f923699bf6f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LowRankApprox = "898213cb-b102-5a47-900c-97e73b919f73"
+Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
