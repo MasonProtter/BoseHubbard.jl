@@ -15,37 +15,6 @@ struct Dn end
 const up = Up()
 const dn = Dn()
 
-begin # piracy 
-    Base.:(+)(A::Hermitian, B::SparseMatrixCSC) = parent(A) + B
-    Base.:(+)(A::SparseMatrixCSC, B::Hermitian) = A + parent(B)
-    Base.:(+)(A::Hermitian{SparseMatrixCSC}, B::Hermitian{SparseMatrixCSC}) = Hermitian(parent(A) + parent(B))
-end
-
-struct Projector 
-    inds::Vector{Int} 
-end
-struct AdjointProjector
-    inds::Vector{Int} 
-end
-struct AdjointProjectorTimesMatrix{T} 
-    inds::Vector{Int}
-    mat::T 
-end
-Base.adjoint(P::Projector) = AdjointProjector(P.inds)
-
-Base.:(*)(Pdg::AdjointProjector, m) = AdjointProjectorTimesMatrix(Pdg.inds, m)
-function Base.:(*)(PdgM::AdjointProjectorTimesMatrix, P::Projector) 
-    M = PdgM.mat
-    @inbounds [M[i, j] for i ∈ PdgM.inds, j ∈ P.inds]
-end
-
-function Base.:(*)(PdgM::AdjointProjectorTimesMatrix{<:BandedMatrix}, P::Projector) 
-    M = PdgM.mat
-    @assert M.l == M.u == 0
-    @inbounds Diagonal([M[i, i] for i ∈ PdgM.inds])
-end
-
-
 
 function Bose_ladder(;L, Ncut)
     id  = I(Ncut) |> BandedMatrix
@@ -104,6 +73,36 @@ function Hubbard_Hamiltonian_projected(;U, μ, L, Ncut, n)
     end * inv(L) |> Hermitian
 end
 
+
+begin # piracy 
+    Base.:(+)(A::Hermitian, B::SparseMatrixCSC) = parent(A) + B
+    Base.:(+)(A::SparseMatrixCSC, B::Hermitian) = A + parent(B)
+    Base.:(+)(A::Hermitian{SparseMatrixCSC}, B::Hermitian{SparseMatrixCSC}) = Hermitian(parent(A) + parent(B))
+end
+
+struct Projector 
+    inds::Vector{Int} 
+end
+struct AdjointProjector
+    inds::Vector{Int} 
+end
+struct AdjointProjectorTimesMatrix{T} 
+    inds::Vector{Int}
+    mat::T 
+end
+Base.adjoint(P::Projector) = AdjointProjector(P.inds)
+
+Base.:(*)(Pdg::AdjointProjector, m) = AdjointProjectorTimesMatrix(Pdg.inds, m)
+function Base.:(*)(PdgM::AdjointProjectorTimesMatrix, P::Projector) 
+    M = PdgM.mat
+    @inbounds [M[i, j] for i ∈ PdgM.inds, j ∈ P.inds]
+end
+
+function Base.:(*)(PdgM::AdjointProjectorTimesMatrix{<:BandedMatrix}, P::Projector) 
+    M = PdgM.mat
+    @assert M.l == M.u == 0
+    @inbounds Diagonal([M[i, i] for i ∈ PdgM.inds])
+end
 
 
 end # module
