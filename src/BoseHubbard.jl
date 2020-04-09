@@ -4,7 +4,7 @@ using LinearAlgebra, Reexport
 @reexport using SparseArrays, Arpack, LowRankApprox, Conjugates, BandedMatrices, LazyBandedMatrices
 
 export ⊗, ∑, up, dn, Bose_ladder, Hubbard_Hamiltonian, number_operator, Projector, number_projector
-export Hubbard_Hamiltonian_projected
+export Hubbard_Hamiltonian_projected, Hubbard_Zeeman_Hamiltonian, Hubbard_Zeeman_Hamiltonian_projected
 
 ⊗(args...) = kron(args...) #Kronecker product
 
@@ -27,18 +27,44 @@ function Bose_ladder(;L, Ncut)
     a(i, ::Dn) = reduce(⊗, (i==j ? a_local_dn : id² for j ∈ 1:L)) #dn lowering operator at site i
 end
 
-function Hubbard_Hamiltonian(;U, μ, L, Ncut)
+function Hubbard_Hamiltonian(;t, U, μ, L, Ncut)
     a = Bose_ladder(;L=L, Ncut=Ncut)
     n(i) = a(i, up)'a(i, up) + a(i, dn)'a(i, dn) #local number operator
     Hint(i) = sparse((U*n(i) - μ*I)*n(i))        #Interation term
     
     (1/L) * (Hermitian ∘ ∑)(1:L) do i  #sum over all sites
         j = mod(i+1, 1:L)              # periodic BCs
-        Ht = -1/2*((sparse(a(i, up)'a(j, up)) + hc) 
+        Ht = -t/2*(  (sparse(a(i, up)'a(j, up)) + hc) 
                    + (sparse(a(i, dn)'a(j, dn)) + hc)) #Kinetic term
         Ht + Hint(i)
     end
 end
+
+function Hubbard_Zeeman_Hamiltonian(;Ω0, L, Ncut, kwargs...)
+    a = Bose_ladder(L=L, Ncut=Ncut)
+    function HZ(θ, ϕ)
+        qz =        cos(θ)
+        qx = cos(ϕ)*sin(θ)
+        qy = sin(ϕ)*sin(θ)
+        q_dot_σ = [qz       qx-im*qy
+                   qx+im*qy      -qz]
+
+        H0 = Hubbard_Hamiltonian(;L=L, Ncut=Ncut, kwargs...)
+        HZ = H0 + (Hermitian ∘ sum)(1:L) do i        
+            ai = Matrix{Float64}[a(i, up), a(i, dn)]
+            transpose(ai)*q_dot_σ*ai
+        end / L
+    end
+end
+
+function Hubbard_Zeeman_Hamiltonian_projected(;n, L, Ncut, kwargs...)
+    P = number_projector(;L=L, Ncut=Ncut)(n)
+    function HZn(θ, ϕ)
+        HZ = Hubbard_Zeeman_Hamiltonian(;L=L, Ncut=Ncut, kwargs...)(θ, ϕ)
+        P'*HZ*P
+    end
+end
+
 
 # Number operator for all sites
 function number_operator(;L, Ncut)
