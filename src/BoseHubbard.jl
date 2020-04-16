@@ -65,7 +65,6 @@ function Hubbard_Zeeman_Hamiltonian_projected(;n, L, Ncut, kwargs...)
     end
 end
 
-
 # Number operator for all sites
 function number_operator(;L, Ncut)
     a = Bose_ladder(;L=L, Ncut=Ncut)
