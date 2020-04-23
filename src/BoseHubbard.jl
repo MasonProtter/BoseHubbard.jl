@@ -1,7 +1,7 @@
 module BoseHubbard
 
 using LinearAlgebra, Reexport
-@reexport using SparseArrays, Arpack, LowRankApprox, Conjugates, BandedMatrices, LazyBandedMatrices
+@reexport using SparseArrays, Arpack, LowRankApprox, Conjugates, BandedMatrices, LazyBandedMatrices, StaticArrays
 
 export ⊗, ∑, up, dn, Bose_ladder, Hubbard_Hamiltonian, number_operator, Projector, number_projector
 export Hubbard_Hamiltonian_projected, Hubbard_Zeeman_Hamiltonian, Hubbard_Zeeman_Hamiltonian_projected
@@ -16,26 +16,31 @@ const up = Up()
 const dn = Dn()
 
 
+# NOTE: This is a two-flavour (i.e. pseudospin-1/2) Bose Hubbard model.
+
 function Bose_ladder(;L, Ncut)
-    id  = I(Ncut) |> BandedMatrix # Spinless local identity operator
+    id  = BandedMatrix(I(Ncut)) # Spinless local identity operator
     id² = id ⊗ id                # Spinful local identity operator 
     a_local = BandedMatrix(-1 => sqrt.(Ncut-1:-1:1)) #Spinless lowering operator
 
-    a_local_up = a_local ⊗ id       # Spin up lowering operator
-    a_local_dn = id      ⊗ a_local  # Spin down lowering operator
-    a(i, ::Up) = reduce(⊗, (i==j ? a_local_up : id² for j ∈ 1:L)) #up lowering operator at site i
-    a(i, ::Dn) = reduce(⊗, (i==j ? a_local_dn : id² for j ∈ 1:L)) #dn lowering operator at site i
+    a_local_up = a_local ⊗ id        # Spin up lowering operator
+    a_local_dn = id      ⊗ a_local   # Spin down lowering operator
+    a(i, ::Up) = (sparse ∘ reduce)(⊗, (i==j ? a_local_up : id² for j ∈ 1:L)) #up lowering operator at site i
+    a(i, ::Dn) = (sparse ∘ reduce)(⊗, (i==j ? a_local_dn : id² for j ∈ 1:L)) #dn lowering operator at site i
 end
 
 function Hubbard_Hamiltonian(;t, U, μ, L, Ncut)
     a = Bose_ladder(;L=L, Ncut=Ncut)
-    n(i) = a(i, up)'a(i, up) + a(i, dn)'a(i, dn) #local number operator
-    Hint(i) = sparse((U*n(i) - μ*I)*n(i))        #Interation term
+    n(i, ::Up) = a(i, up)'a(i, up)
+    n(i, ::Dn) = a(i, dn)'a(i, dn)
+    n(i) = n(i, up) + n(i, dn)
+    
+    Hint(i) = sparse(U*(n(i) - 2*I)*n(i) - μ*n(i)) #Interation term
     
     (1/L) * (Hermitian ∘ ∑)(1:L) do i  #sum over all sites
         j = mod(i+1, 1:L)              # periodic BCs
-        Ht = -t/2*(  (sparse(a(i, up)'a(j, up)) + hc) 
-                   + (sparse(a(i, dn)'a(j, dn)) + hc)) #Kinetic term
+        Ht = -t/2*(  (a(i, up)'a(j, up) + hc) 
+                   + (a(i, dn)'a(j, dn) + hc)) #Kinetic term
         Ht + Hint(i)
     end
 end
@@ -46,14 +51,14 @@ function Hubbard_Zeeman_Hamiltonian(;Ω0, L, Ncut, kwargs...)
         qz =        cos(θ)
         qx = cos(ϕ)*sin(θ)
         qy = sin(ϕ)*sin(θ)
-        q_dot_σ = [qz       qx-im*qy
-                   qx+im*qy      -qz]
 
         H0 = Hubbard_Hamiltonian(;L=L, Ncut=Ncut, kwargs...)
-        HZ = H0 + (Hermitian ∘ sum)(1:L) do i        
-            ai = Matrix{Float64}[a(i, up), a(i, dn)]
-            transpose(ai)*q_dot_σ*ai
+        HZ = (sum)(1:L) do i        
+            (qz*(a(i, up)'a(i, up) - a(i, dn)'a(i, dn))
+             + qx*(a(i, up)'a(i, dn)+ a(i, dn)'a(i, up))
+             - im*qy*(a(i, up)'a(i, dn) - a(i, dn)'a(i, up)))
         end / L
+        HZ + H0
     end
 end
 
@@ -68,7 +73,7 @@ end
 # Number operator for all sites
 function number_operator(;L, Ncut)
     a = Bose_ladder(;L=L, Ncut=Ncut)
-    n(i) = (a(i, up)'a(i, up) + a(i, dn)'a(i, dn))
+    n(i) = (Diagonal(a(i, up)'a(i, up)) + Diagonal(a(i, dn)'a(i, dn)))
     ∑(n, 1:L)
 end
 
@@ -76,7 +81,7 @@ end
 function number_projector(;L, Ncut)
     n̂ = number_operator(;L=L, Ncut=Ncut)
     function P(n)
-        v = (x -> x ≈ n ? 1 : 0).(vec(n̂.data))
+        v = (x -> x ≈ n ? 1 : 0).(collect(n̂.diag))
         sum_v = sum(v)
         inds = sortperm(v, rev=true)[1:sum_v]
         Projector(inds)
