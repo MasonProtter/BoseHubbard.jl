@@ -10,6 +10,8 @@ export Hubbard_Hamiltonian_projected, Hubbard_Zeeman_Hamiltonian, Hubbard_Zeeman
 
 const ∑ = sum  #fancy sum notation
 
+include("piracy.jl")
+
 struct Up   end
 struct Dn end
 const up = Up()
@@ -130,12 +132,6 @@ function Base.:(*)(PdgM::AdjointProjectorTimesMatrix{<:BandedMatrix}, P::Project
     @inbounds Diagonal([M[i, i] for i ∈ PdgM.inds])
 end
 
-
-begin # piracy 
-    Base.:(+)(A::Hermitian, B::SparseMatrixCSC) = parent(A) + B
-    Base.:(+)(A::SparseMatrixCSC, B::Hermitian) = A + parent(B)
-    Base.:(+)(A::Hermitian{SparseMatrixCSC}, B::Hermitian{SparseMatrixCSC}) = Hermitian(parent(A) + parent(B))
-end
 
 
 
